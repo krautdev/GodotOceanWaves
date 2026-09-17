@@ -159,16 +159,9 @@ func _manage_cpu_displacement_textures_updates(delta) -> void:
 		_texture_loading_index += 1
 		if _texture_loading_index >= len(_cpu_displacement_textures):
 			_texture_loading_index = 0
-		var _buffer_img : Image
-		thread = Thread.new()
 		_img_async_image_idx = _cpu_displacement_textures_indeces[_texture_loading_index]
-		thread.start(_update_cpu_displacement_textures)
-		#_update_cpu_displacement_textures()
-		if not _buffer_img:
-			thread.wait_to_finish()
-		mutex.lock()
+		_update_cpu_displacement_textures()
 		_cpu_displacement_textures[_img_async_image_idx] = _img_async_buffer
-		mutex.unlock()
 		_displacement_textures_update_time = 0.0
 	_displacement_textures_update_time += delta
 
@@ -203,14 +196,37 @@ func _setup_cpu_displacement_textures() -> void:
 
 var _img_async_buffer : Image
 var _img_async_image_idx:int = 0
+var _readback_pending: bool = false
 func _update_cpu_displacement_textures() -> void:
-	var rid_displacement_map = wave_generator.descriptors[&'displacement_map'].rid
-	var device:RenderingDevice = RenderingServer.get_rendering_device()
-	var tex = device.texture_get_data(rid_displacement_map, _img_async_image_idx) # layer is the texture of the cascade with the same index
-	var img = Image.create_from_data(wave_generator.map_size, wave_generator.map_size, false, Image.FORMAT_RGBAH, tex)
-	mutex.lock()
+	# If we have a already pending request
+	if _readback_pending:
+		return
+
+	var rid_displacement_map = wave_generator.descriptors[&"displacement_map"].rid
+	var device: RenderingDevice = RenderingServer.get_rendering_device()
+
+	_readback_pending = true
+
+	device.texture_get_data_async(
+		rid_displacement_map,
+		_img_async_image_idx,
+		_on_displacement_texture_data
+	)
+
+
+func _on_displacement_texture_data(data: PackedByteArray) -> void:
+	# The request is over
+	_readback_pending = false
+
+	# Convert the data received by the GPU in an image
+	var img := Image.create_from_data(
+		wave_generator.map_size,
+		wave_generator.map_size,
+		false,
+		Image.FORMAT_RGBAH,
+		data
+	)
 	_img_async_buffer = img
-	mutex.unlock()
 
 func _world_to_uv(W:Vector2, tile_length:Vector2) -> Vector2:
 	return Vector2(
@@ -234,6 +250,12 @@ func get_height(world_pos:Vector3, steps:int=3) -> float:
 		# iteratively approximate the correct uv to get the height of the vertex that was displaced in the XZ-axis
 		for i in range(steps):
 			var img_v = _world_to_uv(x, tile_length) * map_size
+			
+			# If this function is called before the execution of
+			# _update_cpu_displacement_textures
+			if _cpu_displacement_textures[cascade_index] == null:
+				return 0.0
+			
 			y_raw = _cpu_displacement_textures[cascade_index].get_pixelv(img_v)
 			y = Vector2(y_raw.r,y_raw.b)
 			x = world_pos_xz-y

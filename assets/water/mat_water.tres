@@ -1,6 +1,6 @@
-[gd_resource type="ShaderMaterial" load_steps=4 format=4 uid="uid://byumtcccq4ew3"]
+[gd_resource type="ShaderMaterial" format=4 uid="uid://byumtcccq4ew3"]
 
-[ext_resource type="Shader" path="res://assets/shaders/spatial/water.gdshader" id="1_uffek"]
+[ext_resource type="Shader" uid="uid://cachh6r6ypyfl" path="res://assets/shaders/spatial/water.gdshader" id="1_uffek"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_uoul6"]
 noise_type = 2
@@ -9,8 +9,8 @@ frequency = 0.1127
 [sub_resource type="NoiseTexture2D" id="NoiseTexture2D_rrnu2"]
 width = 1024
 height = 1024
-seamless = true
 noise = SubResource("FastNoiseLite_uoul6")
+seamless = true
 
 [resource]
 render_priority = -2
@@ -19,4 +19,4 @@ shader_parameter/depth_color_consumption = Vector3(7.5, 22, 38)
 shader_parameter/roughness = 0.65
 shader_parameter/normal_strength = 1.0
 shader_parameter/foam_noise_tex = SubResource("NoiseTexture2D_rrnu2")
-shader_parameter/map_scales = PackedVector4Array(0.0113636, 0.0113636, 1, 1, 0.0175439, 0.0175439, 0.75, 1, 0.0625, 0.0625, 0, 0.25)
+shader_parameter/map_scales = PackedVector4Array(0.011363637, 0.011363637, 1, 1, 0.01754386, 0.01754386, 0.75, 1, 0.0625, 0.0625, 0, 0.25)

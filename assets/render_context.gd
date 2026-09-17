@@ -117,16 +117,13 @@ func create_pipeline(block_dimensions : Array, descriptor_sets : Array, shader :
 		else:
 			device.compute_list_dispatch(compute_list, block_dimensions[0], block_dimensions[1], block_dimensions[2])
 
-## Returns a [PackedFloat32Array] from the provided data, whose size is rounded up to the nearest
-## multiple of 16
+## Returns a [PackedFloat32Array] from the provided data
 static func create_push_constant(data : Array) -> PackedByteArray:
 	var packed_size := len(data)*4
 	assert(packed_size <= 128, 'Push constant size must be at most 128 bytes!')
 
-	var padding := ceili(packed_size/16.0)*16 - packed_size
 	var packed_data := PackedByteArray();
-	packed_data.resize(packed_size + (padding if padding > 0 else 0));
-	packed_data.fill(0);
+	packed_data.resize(packed_size);
 
 	for i in range(len(data)):
 		match typeof(data[i]):

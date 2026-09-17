@@ -17,3 +17,6 @@ mono_crash.*.json
 
 build/
 youtube/
+
+# VS Code
+.vscode/

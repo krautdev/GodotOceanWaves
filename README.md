@@ -1,11 +1,11 @@
-# This is only for Godot 4.3.
-Since 4.4 we have async GPU readback and this here does not use it.
+# This works on Godot 4.7.
+
 # KrautDev Fork of GodotOceanWaves
 This fork aims to add several features to make this amazing ocean implementation usable in a Godot game project.
 ### Functional
 #### Water Height at any Global Position
 - [x] Get current height of the water line at any world position. `water.gd` has `get_height(world_pos:Vector3, steps:int=3) -> float` that returns the global y value of a provided global position.
-- [ ] Write async readback from GPU. The displacement textures are loaded from GPU via `RenderingServer.texture_get_data` passing the RID of the textures which is saved in `wave_generator.descriptors[&'displacement_map'].rid`. I'm still figuring out how a separate thread can be used to read back the textures from GPU to CPU without additional waiting times due to mutexes blocking each other.
+- [X] Use `RenderingDevice.texture_get_data_async` for retrieving displacement textures without blocking the main loop.
 #### Buoyancy
 there are different approaches to do it for ships and other larger objects:
   1) let the object sit on several buoy objects that create an upward force depending on the depth of the buoy in the water (https://www.fxguide.com/fxfeatured/assassins-creed-iii-the-tech-behind-or-beneath-the-action/)
