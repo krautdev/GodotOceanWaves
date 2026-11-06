@@ -20,6 +20,7 @@ layout(std430, set = 0, binding = 1) restrict buffer FFTBuffer {
 
 layout(push_constant) restrict readonly uniform PushConstants {
 	uint cascade_index;
+	uint _pad0, _pad1, _pad2; // 4 -> 16 bytes
 };
 
 shared vec2 tile[TILE_SIZE][TILE_SIZE+1];

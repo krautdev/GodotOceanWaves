@@ -26,6 +26,7 @@ layout(push_constant) restrict readonly uniform PushConstants {
 	float depth;
 	float time;
 	uint cascade_index;
+	float _pad0, _pad1, _pad2; // 20 -> 32 bytes
 };
 
 /** Returns exp(j*x) assuming x >= 0. */

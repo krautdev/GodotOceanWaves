@@ -139,78 +139,50 @@ func _notification(what: int) -> void:
 #  displacement textures loading from gpu
 # =============================================================================
 
-var mutex: Mutex
-var thread: Thread
-
-#var _cpu_displacement_textures_buffer : Dictionary = {} # dict idx:img
-var _cpu_displacement_textures : Dictionary = {} # dict idx:img
+var _cpu_displacement_textures : Dictionary = {} # dict idx:Image
 var _displacement_textures_total_update_interval:float = 1.0 / 120.0
 var _displacement_textures_update_time:float = 0.0
-var _actually_used_textures_idx:Array = [] # length == as there are cascades with height displacement > 0
-
 var _texture_loading_index:int = 0
-func _manage_cpu_displacement_textures_updates(delta) -> void:
-	if len(_cpu_displacement_textures) < 1:
-		return
-	var time_per_texture:float = _displacement_textures_total_update_interval / float(len(_cpu_displacement_textures))
-	var _cpu_displacement_textures_indeces = _cpu_displacement_textures.keys()
-	_cpu_displacement_textures_indeces.sort()
-	if _displacement_textures_update_time > time_per_texture:
-		_texture_loading_index += 1
-		if _texture_loading_index >= len(_cpu_displacement_textures):
-			_texture_loading_index = 0
-		var _buffer_img : Image
-		thread = Thread.new()
-		_img_async_image_idx = _cpu_displacement_textures_indeces[_texture_loading_index]
-		thread.start(_update_cpu_displacement_textures)
-		#_update_cpu_displacement_textures()
-		if not _buffer_img:
-			thread.wait_to_finish()
-		mutex.lock()
-		_cpu_displacement_textures[_img_async_image_idx] = _img_async_buffer
-		mutex.unlock()
-		_displacement_textures_update_time = 0.0
-	_displacement_textures_update_time += delta
 
-# func _copy_cpu_displacement_textures_buffer():
-# 	if _cpu_displacement_textures_buffer and len(_cpu_displacement_textures_buffer) > 0:
-# 		mutex.lock()
-# 		for k in _cpu_displacement_textures_buffer.keys():
-# 			_cpu_displacement_textures[k] = _cpu_displacement_textures_buffer[k]
-# 		mutex.unlock()
+# Godot 4.4+ reads the displacement maps back asynchronously:
+# texture_get_data_async() delivers the bytes in a callback during frame sync,
+# so the main thread never waits on the GPU and no worker thread/mutex is needed.
+# Godot 4.3 only has the blocking call, so its refresh rate is lowered instead.
+func _request_cpu_displacement_texture(cascade_index:int) -> void:
+	var descriptor = wave_generator.descriptors.get(&'displacement_map')
+	if descriptor == null: return
+	var device := RenderingServer.get_rendering_device()
+	if device.has_method(&'texture_get_data_async'):
+		device.texture_get_data_async(descriptor.rid, cascade_index, _store_cpu_displacement_texture.bind(cascade_index))
+	else:
+		_store_cpu_displacement_texture(device.texture_get_data(descriptor.rid, cascade_index), cascade_index)
 
-# func _async_gpu_readback():
-# 	for cascade_index in _cpu_displacement_textures.keys():
-# 		_update_cpu_displacement_textures(cascade_index)
+func _store_cpu_displacement_texture(data:PackedByteArray, cascade_index:int) -> void:
+	if not is_instance_valid(wave_generator): return
+	var size:int = wave_generator.map_size
+	if data.size() != size*size*8: return # RGBA16F
+	_cpu_displacement_textures[cascade_index] = Image.create_from_data(size, size, false, Image.FORMAT_RGBAH, data)
 
 func _setup_cpu_displacement_textures() -> void:
-	# load first_n_cascades_for_collision_detection textures
-	var _actually_used_textures_idx:Array = []
+	_cpu_displacement_textures.clear()
+	# A blocking readback of a 1024x1024 map is expensive, so poll it rarely.
+	if not RenderingServer.get_rendering_device().has_method(&'texture_get_data_async'):
+		_displacement_textures_total_update_interval = 1.0 / 15.0
 	for i in range(len(parameters)):
-		var cascade = parameters[i]
-		if cascade.displacement_scale > 0.001:
-			_actually_used_textures_idx.append(i)
-	
-	var rid_displacement_map = wave_generator.descriptors[&'displacement_map'].rid
-	var device:RenderingDevice = RenderingServer.get_rendering_device()
-	for i in range(len(parameters)):
-		if i in _actually_used_textures_idx:
-			var tex = device.texture_get_data(rid_displacement_map, i) # layer is the texture of the cascade with the same index
-			var img:Image = Image.create_from_data(wave_generator.map_size, wave_generator.map_size, false, Image.FORMAT_RGBAH, tex)
-			#_cpu_displacement_textures_buffer[i] = img
-			_cpu_displacement_textures[i] = img
-	mutex = Mutex.new()
+		if parameters[i].displacement_scale > 0.001:
+			_request_cpu_displacement_texture(i)
 
-var _img_async_buffer : Image
-var _img_async_image_idx:int = 0
-func _update_cpu_displacement_textures() -> void:
-	var rid_displacement_map = wave_generator.descriptors[&'displacement_map'].rid
-	var device:RenderingDevice = RenderingServer.get_rendering_device()
-	var tex = device.texture_get_data(rid_displacement_map, _img_async_image_idx) # layer is the texture of the cascade with the same index
-	var img = Image.create_from_data(wave_generator.map_size, wave_generator.map_size, false, Image.FORMAT_RGBAH, tex)
-	mutex.lock()
-	_img_async_buffer = img
-	mutex.unlock()
+func _manage_cpu_displacement_textures_updates(delta:float) -> void:
+	var count := _cpu_displacement_textures.size()
+	if count == 0: return
+	_displacement_textures_update_time += delta
+	var time_per_texture:float = _displacement_textures_total_update_interval / float(count)
+	if _displacement_textures_update_time < time_per_texture: return
+	_displacement_textures_update_time = 0.0
+	var indices := _cpu_displacement_textures.keys()
+	indices.sort()
+	_texture_loading_index = (_texture_loading_index + 1) % count
+	_request_cpu_displacement_texture(indices[_texture_loading_index])
 
 func _world_to_uv(W:Vector2, tile_length:Vector2) -> Vector2:
 	return Vector2(

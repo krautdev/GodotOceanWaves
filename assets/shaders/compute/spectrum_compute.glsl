@@ -27,6 +27,7 @@ layout(push_constant) restrict readonly uniform PushConstants {
 	float detail;
 	float spread;
 	uint cascade_index;
+	float _pad0, _pad1, _pad2; // 52 -> 64 bytes
 };
 
 // --- HELPER FUNCTIONS ---
